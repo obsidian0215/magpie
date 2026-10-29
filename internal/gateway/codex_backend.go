@@ -3034,6 +3034,12 @@ func userMessage(text string) map[string]any { return codexsummary.UserMessage(t
 // when none is left Codex is told so. One conversation's compaction that
 // keeps failing stops being asked for a while (compactFails, #2274).
 func (s *Server) codexCompact(w http.ResponseWriter, r *http.Request, body []byte) {
+	r, body, rejected, middlewareDone := compactMiddleware(r, body)
+	defer middlewareDone()
+	if rejected != nil {
+		writeError(w, provider.Responses, rejected.Status, rejected.Message)
+		return
+	}
 	key, model := compactKey(body), modelOf(body)
 	// Codex's compaction on the model a thread is leaving, under magpie's
 	// provider: one that fails is compacted locally, as Codex would have

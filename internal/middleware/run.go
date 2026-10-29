@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -34,6 +35,25 @@ func (Chain) Begin(info gwmw.Info) gwmw.Run {
 	return nil
 }
 
+// BeginInternal runs only modules that explicitly name this kind. Internal
+// summaries use request hooks, never the reply hooks meant for the agent.
+func (Chain) BeginInternal(info gwmw.Info) gwmw.Run {
+	s := current()
+	if s == nil || info.Kind == "" {
+		return nil
+	}
+	selected := &set{}
+	for _, m := range s.list {
+		if slices.Contains(m.internalRequests, info.Kind) && (m.hasReq || m.hasProv) {
+			selected.list = append(selected.list, m)
+		}
+	}
+	if len(selected.list) == 0 {
+		return nil
+	}
+	return beginWith(selected, info)
+}
+
 // On counts the middleware plugins.json has on, whether or not it loads.
 func On() int { return len(middlewares()) }
 
@@ -55,6 +75,10 @@ func Begin(info Info) *Run {
 	if s == nil || !s.hooked {
 		return nil
 	}
+	return beginWith(s, info)
+}
+
+func beginWith(s *set, info Info) *Run {
 	b, _ := json.Marshal(info)
 	return &Run{set: s, info: b, insts: make([]*inst, len(s.list)), ctxs: make([]moejs.Value, len(s.list))}
 }

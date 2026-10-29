@@ -32,6 +32,7 @@ type Info struct {
 	Stream   bool   `json:"stream"`
 	Path     string `json:"path"`
 	Agent    string `json:"agent,omitempty"`
+	Kind     string `json:"kind,omitempty"` // codex_compaction for an opted-in internal summary request
 }
 
 // Reject is a request a middleware turned away: the agent gets Status with
@@ -45,6 +46,13 @@ type Reject struct {
 type Agent interface {
 	// Begin is asked as a request starts; nil leaves it alone
 	Begin(Info) Run
+}
+
+// InternalAgent opts into request-side processing of an internal request.
+// The reply belongs to magpie, so Wrap is not called. Implementations must
+// leave kinds they do not explicitly support alone.
+type InternalAgent interface {
+	BeginInternal(Info) Run
 }
 
 // Run is an agent middleware on one request.

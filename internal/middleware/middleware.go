@@ -54,9 +54,10 @@ type mw struct {
 	hasResp    bool
 	// events are the stream events onEvent is called for, by name; nil
 	// is every one
-	events  map[string]bool
-	options []byte // the plugin's options, as JSON
-	pool    sync.Pool
+	events           map[string]bool
+	internalRequests []string // explicitly opted-in internal request kinds
+	options          []byte   // the plugin's options, as JSON
+	pool             sync.Pool
 	// strats are its strategies and onUse its onUsage (points.go), which
 	// run in pt
 	strats []strat
@@ -206,6 +207,9 @@ func compile(e plugin.Entry, file string) (*mw, error) {
 		for _, n := range names {
 			m.events[n] = true
 		}
+	}
+	if kinds, ok := in.strings("internalRequests"); ok {
+		m.internalRequests = kinds
 	}
 	m.pool.Put(in)
 	return m, nil

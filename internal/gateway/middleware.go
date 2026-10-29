@@ -76,6 +76,41 @@ func (s *Server) serveAgent(w http.ResponseWriter, r *http.Request, from provide
 
 type triedKey struct{}
 
+// compactMiddleware gives a summary its own request-side runtimes. Only
+// explicitly opted-in middleware runs; titles, searches and reply hooks do not.
+func compactMiddleware(r *http.Request, body []byte) (*http.Request, []byte, *gwmw.Reject, func()) {
+	info := gwmw.Info{Protocol: string(provider.Responses), Model: modelOf(body),
+		Stream: streamOf(body), Path: r.URL.Path, Agent: agentOf(r), Kind: "codex_compaction"}
+	var runs []gwmw.Run
+	var tried []gwmw.Tried
+	done := func() {
+		for _, run := range slices.Backward(runs) {
+			run.End()
+		}
+	}
+	for _, agent := range gwmw.AgentsWanted(middlewareWanted) {
+		internal, ok := agent.(gwmw.InternalAgent)
+		if !ok {
+			continue
+		}
+		run := internal.BeginInternal(info)
+		if run == nil {
+			continue
+		}
+		runs = append(runs, run)
+		var rejected *gwmw.Reject
+		body, rejected = run.Request(body)
+		if rejected != nil {
+			return r, body, rejected, done
+		}
+		if t, ok := run.(gwmw.Tried); ok {
+			tried = append(tried, t)
+		}
+	}
+	r = r.WithContext(context.WithValue(r.Context(), triedKey{}, tried))
+	return r, body, nil, done
+}
+
 // triedOn is body as it goes to model on p, in the agent's API: what each
 // middleware of the request that is also gwmw.Tried (the JS chain's
 // onProvider) made of it for that provider. Each try starts from the body
